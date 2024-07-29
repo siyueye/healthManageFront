@@ -1,0 +1,218 @@
+<script setup>
+import { ref } from 'vue'
+import FoodSelect from './FoodSelect.vue'
+import '@vueup/vue-quill/dist/vue-quill.snow.css'
+import { useUserStore } from '@/stores/modules/user'
+const userStore = useUserStore()
+import {
+  dietGetDetailService,
+  dietAddService,
+  dietEditService
+} from '@/api/diet'
+
+const options = [
+  {
+    value: '0',
+    label: '起床空腹',
+  },
+  {
+    value: '1',
+    label: '早餐前',
+  },
+  {
+    value: '2',
+    label: '早餐后',
+  },
+  {
+    value: '3',
+    label: '午餐前',
+  },
+  {
+    value: '4',
+    label: '午餐后',
+  }
+  ,{
+    value: '5',
+    label: '晚餐前',
+  },
+  {
+    value: '6',
+    label: '晚餐后',
+  },
+  {
+    value: '7',
+    label: '睡觉前',
+  },
+  {
+    value: '8',
+    label: '其他',
+  },
+  
+]
+
+// 控制抽屉显示隐藏
+const visibleDrawer = ref(false)
+
+// 默认数据
+const defaultForm = {
+  userid:userStore.user.id,
+  daytime: '', // 称重时间
+  scene:'',
+  diet:''
+}
+
+// 准备数据
+const formModel = ref({ ...defaultForm })
+
+
+// 提交
+const emit = defineEmits(['success'])
+const onPublish = async () => {
+  // 发请求
+  if (formModel.value.id) {
+    // 编辑操作
+    formModel.value.scene = parseInt(formModel.value.scene.value)
+    if(formModel.value.food.split("_").size>1){
+      formModel.value.food=formModel.value.food.split("_")[1]
+    }
+    await dietEditService(formModel.value)
+    ElMessage.success('修改成功')
+    visibleDrawer.value = false
+    emit('success', 'edit')
+  } else {
+    // 添加操作
+    // formModel.value.scene = parseInt(formModel.value.scene.value)
+    if(formModel.value.food.split("_").size>1){
+      formModel.value.food=formModel.value.food.split("_")[1]
+    }
+    await dietAddService(formModel.value)
+    ElMessage.success('添加成功')
+    visibleDrawer.value = false
+    // 通知到父组件，添加成功了
+    emit('success', 'add')
+  }
+}
+
+// 组件对外暴露一个方法 open，基于open传来的参数，区分添加还是编辑
+// open({})  => 表单无需渲染，说明是添加
+// open({ id, ..., ... })  => 表单需要渲染，说明是编辑
+// open调用后，可以打开抽屉
+const open = async (row) => {
+  visibleDrawer.value = true // 显示抽屉
+  if (row.id) {
+    // 需要基于 row.id 发送请求，获取编辑对应的详情数据，进行回显
+    const res = await dietGetDetailService(row.id)
+    formModel.value = res.data.data
+    formModel.value.daytime = new Date(res.data.data.daytime)
+    formModel.value.scene = options[res.data.data.scene]
+  } else {
+    formModel.value = { ...defaultForm } // 基于默认的数据，重置form数据
+  }
+}
+function heatClick(){
+  console.log(parseFloat(formModel.value.grammage) * parseInt(formModel.value.food.split("_")[1]))
+  formModel.value.heat =parseFloat(formModel.value.grammage) * parseFloat(formModel.value.food.split("_")[1])
+}
+defineExpose({
+  open
+})
+</script>
+
+<template>
+  <el-drawer
+    v-model="visibleDrawer"
+    :title="formModel.id ? '编辑' : '添加'"
+    direction="rtl"
+    size="50%"
+  >
+    <!-- 发表称重表单-->
+    <el-form :model="formModel" ref="formRef" label-width="100px">
+      <el-form-item label="进食时间" prop="title">
+        <el-date-picker
+          v-model="formModel.daytime"
+          type="datetime"
+          placeholder="选择进食时间"
+        />
+      </el-form-item>
+      <el-form-item label="进食场景" prop="scene">
+        <el-select
+          v-model="formModel.scene"
+          placeholder="进食场景"
+          size="large"
+          style="width: 240px"
+        >
+          <el-option
+            v-for="item in options"
+            :key="item.value"
+            :label="item.label"
+            :value="item.value"
+          />
+        </el-select>
+      </el-form-item>
+      <el-form-item label="食物" prop="food">
+        <food-select @update:model-value="func"
+          v-model="formModel.food"
+          width="100%"
+        ></food-select>
+      </el-form-item>
+      <el-form-item label="重量(100g)" prop="grammage">
+        <el-input
+          v-model="formModel.grammage"
+          minlength="2"
+          maxlength="10"
+        ></el-input>
+      </el-form-item>
+      <el-form-item label="热量" prop="heat" @click="heatClick">
+        <el-input
+          v-model="formModel.heat"
+          minlength="1"
+          maxlength="10"
+        ></el-input>
+      </el-form-item>
+      <el-form-item>
+        <el-button @click="onPublish('已提交')" type="primary">提交</el-button>
+      </el-form-item>
+    </el-form>
+  </el-drawer>
+</template>
+
+<style lang="scss" scoped>
+.avatar-uploader {
+  :deep() {
+    .avatar {
+      width: 178px;
+      height: 178px;
+      display: block;
+    }
+
+    .el-upload {
+      border: 1px dashed var(--el-border-color);
+      border-radius: 6px;
+      cursor: pointer;
+      position: relative;
+      overflow: hidden;
+      transition: var(--el-transition-duration-fast);
+    }
+
+    .el-upload:hover {
+      border-color: var(--el-color-primary);
+    }
+
+    .el-icon.avatar-uploader-icon {
+      font-size: 28px;
+      color: #8c939d;
+      width: 178px;
+      height: 178px;
+      text-align: center;
+    }
+  }
+}
+
+.editor {
+  width: 100%;
+
+  :deep(.ql-editor) {
+    min-height: 200px;
+  }
+}
+</style>
